@@ -3,9 +3,10 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(rvest)
+library(magrittr)
 ```
 
 # Read in data from worldometers
@@ -17,7 +18,7 @@ tests_html <- read_html("https://www.worldometers.info/coronavirus/covid-19-test
 
 # Clean and join country-level case detail and test data
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 cor_data <- cor_html %>% html_node("#main_table_countries") %>%
   html_table() %>%
   # removes commas in numbers
