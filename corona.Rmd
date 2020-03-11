@@ -3,6 +3,8 @@ title: "R Notebook"
 output: html_notebook
 ---
 
+Github repo: [https://github.com/roboton/corona](https://github.com/roboton/corona)
+
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(rvest)
