@@ -49,7 +49,7 @@ join_data <- cor_data %>%
   
 # Analysis
 
-# Mortality rate by testing bias
+# Mortality rate by test saturation
 
 One misleading stat we often see are mortality rates based on non-uniform testing.  In some countries, testing capabilities are limited so only the very sick are being tested.  If you're only testing the very sick it will give you a mortality rate that is biased upward.  Below we take a look at the mortailty rate (as defined by number of deaths / number of positive cases) by the amount of tests per million people within a country.
   
