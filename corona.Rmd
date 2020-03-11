@@ -1,0 +1,70 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+```
+
+# Read in data from worldometers
+
+```{r}
+cor_html <- read_html("https://www.worldometers.info/coronavirus/#countries")
+tests_html <- read_html("https://www.worldometers.info/coronavirus/covid-19-testing/")
+```
+
+# Clean and join country-level case detail and test data
+
+```{r}
+cor_data <- cor_html %>% html_node("#main_table_countries") %>%
+  html_table() %>%
+  # removes commas in numbers
+  mutate_if(is.character, function(x) { gsub("[,:]", "", x) }) %>%
+  # turn everything but country column into a numeric
+  mutate_at(vars(-`Country,Other`), as.numeric) %>%
+  # compute a mortality rate
+  replace_na(list("TotalDeaths" = 0)) %>%
+  mutate(MortalityRate = TotalDeaths * 100 / TotalCases)
+
+tests_data <- tests_html %>%
+  html_nodes("table") %>%
+  # Extract the first table
+  extract2(1) %>%
+  html_table(header = T) %>%
+  # Missing variable names so fill in
+  as_tibble(.name_repair = "unique") %>%
+  # Get of rid of commas
+  mutate_if(is.character, function(x) { gsub("[,:]", "", x) }) %>%
+  # turn columns except country into numeric
+  mutate_at(vars(-Country), as.numeric) %>%
+  # rename South Korea to S. Korea
+  mutate(Country=if_else(Country == "South Korea", "S. Korea", Country))
+
+join_data <- cor_data %>%
+  left_join(tests_data, by=c("Country,Other" = "Country"))
+```
+  
+# Analysis
+
+# Mortality rate by testing bias
+
+One misleading stat we often see are mortality rates based on non-uniform testing.  In some countries, testing capabilities are limited so only the very sick are being tested.  If you're only testing the very sick it will give you a mortality rate that is biased upward.  Below we take a look at the mortailty rate (as defined by number of deaths / number of positive cases) by the amount of tests per million people within a country.
+  
+```{r}
+join_data %>%
+  #filter(`Country,Other` != "Italy") %>%
+  select(`Tests per Million People`, MortalityRate, `Country,Other`,
+         TotalDeaths) %>%
+  filter(complete.cases(.)) %>% 
+  filter(MortalityRate > 0) %>%
+  ggplot(aes(`Tests per Million People`, MortalityRate, color=TotalDeaths)) +
+  geom_point() +
+  #geom_hline(yintercept=1, alpha=0.5, color="green") +
+  geom_text(aes(label=`Country,Other`),hjust=0, vjust=2, size=3) +
+  #geom_line(stat="smooth", method="lm", alpha=0.2, color="blue") +
+  ylim(0, 7)
+```
+
+South Korea is a promising/optimistic setting where there seems to be a large amount of testing that should reflect a more accurate mortality rate.  Having said that, many of these cases are still active and these active cases can turn into deaths.  South Korea has had a stale number of active cases for some time without them turning into the two end states, Death or Recovered.
