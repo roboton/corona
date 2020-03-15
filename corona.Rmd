@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Covid-19 analysis"
 output: html_notebook
 ---
 
@@ -9,9 +9,10 @@ Github repo: [https://github.com/roboton/corona](https://github.com/roboton/coro
 library(tidyverse)
 library(rvest)
 library(magrittr)
+library(lubridate)
 ```
 
-# Read in data from worldometers
+# Scrape data from worldometers
 
 ```{r}
 cor_html <- read_html("https://www.worldometers.info/coronavirus/#countries")
@@ -29,7 +30,7 @@ cor_data <- cor_html %>% html_node("#main_table_countries") %>%
   mutate_at(vars(-`Country,Other`), as.numeric) %>%
   # compute a mortality rate
   replace_na(list("TotalDeaths" = 0)) %>%
-  mutate(MortalityRate = TotalDeaths * 100 / TotalCases)
+  mutate(`Case Fatality rate`= TotalDeaths * 100 / TotalCases)
 
 tests_data <- tests_html %>%
   html_nodes("table") %>%
@@ -45,29 +46,57 @@ tests_data <- tests_html %>%
   # rename South Korea to S. Korea
   mutate(Country=if_else(Country == "South Korea", "S. Korea", Country))
 
-join_data <- cor_data %>%
-  left_join(tests_data, by=c("Country,Other" = "Country"))
+(join_data <- cor_data %>%
+  left_join(tests_data, by=c("Country,Other" = "Country")))
 ```
   
 # Analysis
 
-# Mortality rate by test saturation
+## Crude mortality rate
+
+```{r}
+join_data %>%
+  filter(!is.na(Population)) %>%
+  mutate(`Crude mortality rate`= 100 * TotalDeaths / Population) %>%
+  ggplot(aes(`Crude mortality rate`,
+             reorder(`Country,Other`, `Crude mortality rate`),)) +
+  geom_point() + ylab("Country") +
+  scale_x_continuous(labels = function(x) format(x, scientific = FALSE))
+```
+
+## Positive test rate
+
+```{r}
+join_data %>%
+  filter(!is.na(Population)) %>%
+  mutate(`Positive test rate`= 100 * TotalCases / `Tests Performed`) %>%
+  ggplot(aes(`Positive test rate`,
+             reorder(`Country,Other`, `Positive test rate`),
+             color=`Tests per Million People`)) +
+  geom_point() +
+  scale_x_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  ylab("Country")
+```
+
+## Case fatality rate by test saturation
 
 One misleading stat we often see are mortality rates based on non-uniform testing.  In some countries, testing capabilities are limited so only the very sick are being tested.  If you're only testing the very sick it will give you a mortality rate that is biased upward.  Below we take a look at the mortailty rate (as defined by number of deaths / number of positive cases) by the amount of tests per million people within a country.
   
 ```{r}
 join_data %>%
-  #filter(`Country,Other` != "Italy") %>%
-  select(`Tests per Million People`, MortalityRate, `Country,Other`,
-         TotalDeaths) %>%
+  select(
+    `Tests per Million People`, `Case Fatality rate`, `Country,Other`, Population,
+    TotalCases) %>%
   filter(complete.cases(.)) %>% 
-  filter(MortalityRate > 0) %>%
-  ggplot(aes(`Tests per Million People`, MortalityRate, color=TotalDeaths)) +
+  filter(`Case Fatality rate` > 0) %>%
+  mutate(low_high = if_else(`Tests per Million People` < 1000, "low", "high")) %>%
+  ggplot(aes(`Tests per Million People`, `Case Fatality rate`, color=TotalCases,
+             group=low_high)) +
   geom_point() +
+  geom_line(stat="smooth", method = "lm", alpha=0.3) +
   #geom_hline(yintercept=1, alpha=0.5, color="green") +
   geom_text(aes(label=`Country,Other`),hjust=0, vjust=2, size=3) +
   #geom_line(stat="smooth", method="lm", alpha=0.2, color="blue") +
   ylim(0, 7)
 ```
 
-South Korea is a promising/optimistic setting where there seems to be a large amount of testing that should reflect a more accurate mortality rate.  Having said that, many of these cases are still active and these active cases can turn into deaths.  South Korea has had a stale number of active cases for some time without them turning into the two end states, Death or Recovered.
